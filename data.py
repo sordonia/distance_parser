@@ -13,8 +13,8 @@ logger.setLevel(logging.INFO)
 
 
 def load_data(data_dir):
-    # train_data = os.path.join(data_dir, '02-21.10way.clean')
-    train_data = os.path.join(data_dir, '22.auto.clean')
+    train_data = os.path.join(data_dir, '02-21.10way.clean')
+    # train_data = os.path.join(data_dir, '22.auto.clean')
     valid_data = os.path.join(data_dir, '22.auto.clean')
     test_data = os.path.join(data_dir, '23.auto.clean')
 
@@ -53,7 +53,7 @@ def load_data(data_dir):
             else:
                 tag_vocab.index(node.tag)
                 word_vocab.index(node.word)
-    
+
     label_vocab.freeze()
     word_vocab.freeze()
     tag_vocab.freeze()
@@ -79,7 +79,7 @@ def _pad(batch, type='int64', cuda=False):
 
 def get_iterator(trees, word_vocab, tag_vocab, label_vocab,
                  batch_size, shuffle=True, unk_drop=True, cuda=False):
-  
+
   idxs = list(range(len(trees)))
   random.shuffle(idxs)
 
@@ -87,13 +87,23 @@ def get_iterator(trees, word_vocab, tag_vocab, label_vocab,
     ridxs = idxs[idx:idx + batch_size]
     trees_ = [trees[i] for i in ridxs]
     stats_ = [tree_to_distance(binarize_tree(tree)) for tree in trees_]
-    
-    dists_, labels_, unarys_, _ = zip(*stats_)
-    tags_ = [[tag_vocab.index(leaf.tag) for leaf in tree.leaves()] for tree in trees_]
-    words_ = [[word_vocab.index(leaf.word) for leaf in tree.leaves()] for tree in trees_]
-    labels_ = [[label_vocab.index(label) for label in labels] for labels in labels_]
-    unarys_ = [[label_vocab.index(label) for label in labels] for labels in unarys_]
 
+    dists_, labels_, unarys_, _ = zip(*stats_)
+    sents_ = [[(l.tag, l.word) for l in tree.leaves()] for tree in trees_]
+    words_, tags_ = [], []
+
+    for sent in sents_:
+        words__ = []
+        tags__ = []
+        for (tag, word) in [('<S>', '<S>')] + sent + [('</S>', '</S>')]:
+            words__.append(word_vocab.index(word))
+            tags__.append(tag_vocab.index(tag))
+        words_.append(words__)
+        tags_.append(tags__)
+
+    labels_ = [[0] + [label_vocab.index(label) for label in labels] + [0] for labels in labels_]
+    unarys_ = [[0] + [label_vocab.index(label) for label in labels] + [0] for labels in unarys_]
+    dists_ = [[0] + dist_ + [0] for dist_ in dists_]
     yield (_pad(words_, cuda=cuda), _pad(tags_, cuda=cuda), _pad(dists_, cuda=cuda),
            _pad(labels_, cuda=cuda), _pad(unarys_, cuda=cuda), trees_)
 

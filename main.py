@@ -62,7 +62,7 @@ def get_args():
 
 def train_epoch(iterator, epoch, model, optimizer):
   model.train()
-  
+
   for nb, batch in enumerate(iterator):
     words, tags, dists, labels, unarys, trees = batch
     dist_pred, label_pred, unary_pred = model(words, tags)
@@ -75,10 +75,11 @@ def train_epoch(iterator, epoch, model, optimizer):
     loss = loss_dist + loss_labl + loss_unary
     loss.backward()
     optimizer.step()
-  
-    print('epoch {:<3d} batch {:<4d} loss {:<.6f} rank {:<.6f} label {:<.6f} unary {:<.6f}'.format(
-        epoch, nb, loss.item(), loss_dist.item(), loss_labl.item(), loss_unary.item()
-    ))
+
+    if nb % 10 == 0:
+        print('epoch {:<3d} batch {:<4d} loss {:<.6f} rank {:<.6f} label {:<.6f} unary {:<.6f}'.format(
+            epoch, nb, loss.item(), loss_dist.item(), loss_labl.item(), loss_unary.item()
+        ))
 
 
 def evaluate_epoch(iterator, epoch, model, vocabs):
@@ -92,15 +93,14 @@ def evaluate_epoch(iterator, epoch, model, vocabs):
     words, tags, dists, labels, unarys, trees = batch
     true_tree = trees[0]
     dist_pred, label_pred, unary_pred = model(words, tags)
-    
-    import ipdb; ipdb.set_trace()
     dist_pred = dist_pred[0].data.cpu().numpy()
     label_pred = np.argmax(label_pred.data.cpu().numpy(), 1)
     unary_pred = np.argmax(unary_pred.data.cpu().numpy(), 1)
     label_pred = [label_vocab.value(x) for x in label_pred]
     unary_pred = [label_vocab.value(x) for x in unary_pred]
     binary_tree = functions.distance_to_tree(
-      dist_pred, label_pred, unary_pred, list(true_tree.leaves()))
+        dist_pred[1:-1], label_pred[1:-1], unary_pred[1:-1],
+        list(true_tree.leaves()))
     pred_tree = functions.debinarize_tree(binary_tree)[0]
 
     pred_trees.append(str(pred_tree))
@@ -115,7 +115,7 @@ def evaluate_epoch(iterator, epoch, model, vocabs):
     f.write("\n".join(pred_trees))
   with open(temp_targ_path, "wb") as f:
     f.write("\n".join(true_trees))
-  
+
   evalb_dir = os.path.join(args.data_dir, "EVALB")
   evalb_param_path = os.path.join(evalb_dir, "COLLINS.prm")
   evalb_program_path = os.path.join(evalb_dir, "evalb")
@@ -159,7 +159,7 @@ def run(args):
     dropout=0.2, dropoute=0., dropoutr=0.)
   if args.cuda:
     model = model.cuda()
-  
+
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0, 0.999),
                                weight_decay=args.weight_decay)
   scheduler = ReduceLROnPlateau(optimizer, mode='max', patience=2, factor=0.5, min_lr=0.000001)
@@ -168,7 +168,7 @@ def run(args):
                                   args.bthsz, shuffle=True, unk_drop=False, cuda=args.cuda)
     dev_iterator = get_iterator(valid_parse, word_vocab, tag_vocab, label_vocab,
                                 1, shuffle=False, unk_drop=False, cuda=args.cuda)
-    # train_epoch(train_iterator, epoch, model, optimizer)
+    train_epoch(train_iterator, epoch, model, optimizer)
     print(evaluate_epoch(dev_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab)))
 
 if __name__ == '__main__':
