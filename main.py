@@ -111,9 +111,9 @@ def evaluate_epoch(iterator, epoch, model, vocabs):
   temp_targ_path = os.path.join(temp_path.name, "true_trees.txt")
   temp_eval_path = os.path.join(temp_path.name, "evals.txt")
 
-  with open(temp_file_path, "wb") as f:
+  with open(temp_file_path, "w") as f:
     f.write("\n".join(pred_trees))
-  with open(temp_targ_path, "wb") as f:
+  with open(temp_targ_path, "w") as f:
     f.write("\n".join(true_trees))
 
   evalb_dir = os.path.join(args.data_dir, "EVALB")
@@ -166,11 +166,12 @@ def run(args):
   for epoch in range(args.epc):
     train_iterator = get_iterator(train_parse, word_vocab, tag_vocab, label_vocab,
                                   args.bthsz, shuffle=True, unk_drop=False, cuda=args.cuda)
+    print("Evaluating...")
     dev_iterator = get_iterator(valid_parse, word_vocab, tag_vocab, label_vocab,
                                 1, shuffle=False, unk_drop=False, cuda=args.cuda)
     test_iterator = get_iterator(test_parse, word_vocab, tag_vocab, label_vocab,
                                  1, shuffle=False, unk_drop=False, cuda=args.cuda)
-    train_epoch(train_iterator, epoch, model, optimizer)
+    # train_epoch(train_iterator, epoch, model, optimizer)
     valid_fscore = evaluate_epoch(dev_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
     test_fscore = evaluate_epoch(test_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
     print("epoch {:d}, valid f1 {:.3f}, test f1 {:.3f}".format(
