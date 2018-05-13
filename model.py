@@ -84,6 +84,7 @@ class DistanceParser(nn.Module):
     self.unary_out = nn.Sequential(
       nn.Dropout(dropout),
       nn.Linear(hid_size * 2, hid_size),
+      LayerNormalization(hid_size),
       nn.ReLU(),
       nn.Dropout(dropout),
       nn.Linear(hid_size, label_size)
@@ -93,6 +94,7 @@ class DistanceParser(nn.Module):
     self.dist_out = nn.Sequential(
       nn.Dropout(dropout),
       nn.Linear(hid_size * 2, hid_size),
+      LayerNormalization(hid_size),
       nn.ReLU(),
       nn.Dropout(dropout),
       nn.Linear(hid_size, 1)
@@ -102,6 +104,7 @@ class DistanceParser(nn.Module):
     self.label_out = nn.Sequential(
       nn.Dropout(dropout),
       nn.Linear(hid_size * 2, hid_size),
+      LayerNormalization(hid_size),
       nn.ReLU(),
       nn.Dropout(dropout),
       nn.Linear(hid_size, label_size),
@@ -110,7 +113,6 @@ class DistanceParser(nn.Module):
   def forward(self, words, tags):
     mask = (words > 0).float()
     B, T = words.size()
-
     emb_words = self.encoder(words)
     emb_words = self.drop(emb_words)
     emb_tags = self.tag_encoder(tags)
@@ -130,8 +132,7 @@ class DistanceParser(nn.Module):
     unary_pred = self.unary_out(rnn_word_out.view(-1, self.hid_size * 2))
 
     conv_out = self.conv1(rnn_word_out.permute(0, 2, 1)).permute(0, 2, 1)  # (bsize, ndst, hidsize)
-    rnn_top_out = run_rnn(conv_out, self.label_rnn, sent_lengths - 1)
-
+    rnn_top_out, _ = self.label_rnn(conv_out)
     dist_pred = self.dist_out(rnn_top_out).squeeze(dim=-1)  # (bsize, ndst)
     label_pred = self.label_out(rnn_top_out)                # (bsize, ndst, arcsize)
     return (dist_pred,

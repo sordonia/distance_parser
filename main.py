@@ -1,3 +1,4 @@
+import math
 import argparse
 import os
 import trees
@@ -11,6 +12,7 @@ import tempfile
 import numpy as np
 from tensorboardX import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import torch.nn as nn
 from data import load_data, get_iterator
 from loss import dist_loss, label_loss, unary_loss
 from model import DistanceParser
@@ -36,11 +38,11 @@ def get_args():
         description='Syntactic distance based neural parser')
     parser.add_argument('--epc', type=int, default=100)
     parser.add_argument('--lr', type=float, default=.001)
-    parser.add_argument('--bthsz', type=int, default=20)
+    parser.add_argument('--bthsz', type=int, default=200)
     parser.add_argument('--hidsz', type=int, default=800)
     parser.add_argument('--embedsz', type=int, default=400)
     parser.add_argument('--window_size', type=int, default=2)
-    parser.add_argument('--dpout', type=float, default=0.3)
+    parser.add_argument('--dpout', type=float, default=0.2)
     parser.add_argument('--dpoute', type=float, default=0.)
     parser.add_argument('--dpoutr', type=float, default=0.)
     parser.add_argument('--seed', type=int, default=1234)
@@ -102,7 +104,6 @@ def evaluate_epoch(iterator, epoch, model, vocabs):
         dist_pred[1:-1], label_pred[1:-1], unary_pred[1:-1],
         list(true_tree.leaves()))
     pred_tree = functions.debinarize_tree(binary_tree)[0]
-
     pred_trees.append(str(pred_tree))
     true_trees.append(str(true_tree))
 
@@ -171,7 +172,7 @@ def run(args):
                                 1, shuffle=False, unk_drop=False, cuda=args.cuda)
     test_iterator = get_iterator(test_parse, word_vocab, tag_vocab, label_vocab,
                                  1, shuffle=False, unk_drop=False, cuda=args.cuda)
-    # train_epoch(train_iterator, epoch, model, optimizer)
+    train_epoch(train_iterator, epoch, model, optimizer)
     valid_fscore = evaluate_epoch(dev_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
     test_fscore = evaluate_epoch(test_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
     print("epoch {:d}, valid f1 {:.3f}, test f1 {:.3f}".format(

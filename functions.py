@@ -59,9 +59,12 @@ def tree_to_distance(root):
 
 
 def distance_to_tree(dist, cons, unary, leaves):
+  assert len(dist) == len(leaves) - 1
+  assert len(cons) == len(dist)
+  assert len(unary) == len(leaves)
   if not len(dist):
     tree = leaves[0]
-    if unary[0]:
+    if unary[0] != vocabulary.PAD and unary[0] != ():
       tree = trees.InternalParseNode(unary[0], [tree])
   else:
     i = np.argmax(dist)
