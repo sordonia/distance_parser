@@ -62,9 +62,8 @@ class InternalParseNode(ParseNode):
     def __init__(self, label, children, nocache=False):
         assert isinstance(label, tuple)
         assert all(isinstance(sublabel, str) for sublabel in label)
-        assert label
+        # assert label
         self.label = label
-
         assert isinstance(children, collections.abc.Sequence)
         assert all(isinstance(child, ParseNode) for child in children)
         assert children
@@ -73,11 +72,12 @@ class InternalParseNode(ParseNode):
             left.right == right.left
             for left, right in zip(children, children[1:]))
         self.children = tuple(children)
-
         self.left = children[0].left
         self.right = children[-1].right
-
         self.nocache = nocache
+
+    def __str__(self):
+        return self.convert().linearize()
 
     def leaves(self):
         for child in self.children:
@@ -85,6 +85,8 @@ class InternalParseNode(ParseNode):
 
     def convert(self):
         children = [child.convert() for child in self.children]
+        if not self.label:
+            return InternalTreebankNode("<empty>", children)
         tree = InternalTreebankNode(self.label[-1], children)
         for sublabel in reversed(self.label[:-1]):
             tree = InternalTreebankNode(sublabel, [tree])

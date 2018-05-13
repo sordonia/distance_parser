@@ -3,7 +3,8 @@ import collections
 PAD = "<PAD>"
 START = "<S>"
 STOP = "</S>"
-UNK ="<UNK>"
+UNK = "<UNK>"
+TAG_UNK = "<UNK>"
 
 
 class Vocabulary(object):
