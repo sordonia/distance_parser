@@ -112,7 +112,8 @@ class DistanceParser(nn.Module):
       nn.Linear(hid_size, label_size),
     )
 
-  def forward(self, words, tags, mask):
+  def forward(self, words, tags):
+    mask = (words > 0).float()
     bsz, ntoken = words.size()
     emb_words = embedded_dropout(self.encoder, words, dropout=self.dropoute if self.training else 0)
     emb_words = self.drop(emb_words)

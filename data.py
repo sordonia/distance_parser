@@ -4,10 +4,12 @@ import logging
 import random
 import numpy as np
 import vocabulary
+import torch
 from functions import binarize_tree, tree_to_distance
 
 
 logger = logging.getLogger("dp")
+logger.setLevel(logging.INFO)
 
 
 def load_data(data_dir):
@@ -61,16 +63,19 @@ def load_data(data_dir):
             train_parse, valid_parse, test_parse)
 
 
-def _pad(batch, type='int64'):
+def _pad(batch, type='int64', cuda=False):
   max_len = max(len(v) for v in batch)
   pad_batch = np.zeros((len(batch), max_len))
   for i, row in enumerate(batch):
     pad_batch[i, :len(row)] = row
-    return pad_batch.astype(type)
+  pad_batch = torch.from_numpy(pad_batch.astype(type))
+  if cuda:
+    pad_batch = pad_batch.cuda()
+  return pad_batch
 
 
 def get_iterator(trees, word_vocab, label_vocab, tag_vocab,
-                 batch_size, shuffle=True, unk_drop=True):
+                 batch_size, shuffle=True, unk_drop=True, cuda=False):
   
   idxs = list(range(len(trees)))
   random.shuffle(idxs)
@@ -85,5 +90,6 @@ def get_iterator(trees, word_vocab, label_vocab, tag_vocab,
     words_ = [[word_vocab.index(leaf.word) for leaf in tree.leaves()] for tree in trees_]
     labels_ = [[label_vocab.index(label) for label in labels] for labels in labels_]
     unarys_ = [[label_vocab.index(label) for label in labels] for labels in unarys_]
-    yield (_pad(words_), _pad(tags_), _pad(dists_), _pad(labels_), _pad(unarys_), trees_)
+    yield (_pad(words_, cuda=cuda), _pad(tags_, cuda=cuda), _pad(dists_, cuda=cuda),
+           _pad(labels_, cuda=cuda), _pad(unarys_, cuda=cuda), trees_)
 

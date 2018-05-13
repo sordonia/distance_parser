@@ -51,12 +51,13 @@ def tree_to_distance(root):
     c = []
     h = 0
     if isinstance(root, trees.InternalParseNode):
+      # handle the unary chains here
       assert len(root.children) == 1
       t = [root.label]
     else:
-      # leaf
+      # just predict a UNK label
       assert isinstance(root, trees.LeafParseNode)
-      t = [vocabulary.TAG_UNK]
+      t = [vocabulary.UNK]
   return d, c, t, h
 
 
