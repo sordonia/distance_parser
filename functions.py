@@ -52,16 +52,16 @@ def tree_to_distance(root):
       assert len(root.children) == 1
       t = [root.label]
     else:
-      # just predict a UNK label
+      # just predict a empty label
       assert isinstance(root, trees.LeafParseNode)
-      t = [vocabulary.UNK]
+      t = [()]
   return d, c, t, h
 
 
 def distance_to_tree(dist, cons, unary, leaves):
-  if dist == []:
+  if not len(dist):
     tree = leaves[0]
-    if unary[0] != vocabulary.TAG_UNK:
+    if unary[0]:
       tree = trees.InternalParseNode(unary[0], [tree])
   else:
     i = np.argmax(dist)

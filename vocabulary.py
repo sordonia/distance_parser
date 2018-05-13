@@ -25,7 +25,7 @@ class Vocabulary(object):
     def index(self, value):
         if not self.frozen:
             self.counts[value] += 1
-
+            
         if value in self.indices:
             return self.indices[value]
 

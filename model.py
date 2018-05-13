@@ -55,10 +55,9 @@ class DistanceParser(nn.Module):
     self.dropoute = dropoute
     self.dropoutr = dropoutr
     self.encoder = nn.Embedding(vocab_size, embed_size)
+    self.tag_encoder = nn.Embedding(tag_size, embed_size)
     if wordembed is not None:
       self.encoder.weight.data = torch.FloatTensor(wordembed)
-
-    self.tag_encoder = nn.Embedding(tag_size, embed_size)
     self.word_rnn = nn.LSTM(
         2 * embed_size, hid_size, num_layers=2, batch_first=True, dropout=dropout,
         bidirectional=True)
@@ -85,7 +84,6 @@ class DistanceParser(nn.Module):
     self.unary_out = nn.Sequential(
       nn.Dropout(dropout),
       nn.Linear(hid_size * 2, hid_size),
-      nn.BatchNorm1d(hid_size),
       nn.ReLU(),
       nn.Dropout(dropout),
       nn.Linear(hid_size, label_size)
@@ -95,18 +93,15 @@ class DistanceParser(nn.Module):
     self.dist_out = nn.Sequential(
       nn.Dropout(dropout),
       nn.Linear(hid_size * 2, hid_size),
-      nn.BatchNorm1d(hid_size),
       nn.ReLU(),
       nn.Dropout(dropout),
-      nn.Linear(hid_size, 1),
-      nn.BatchNorm1d(1),
+      nn.Linear(hid_size, 1)
     )
 
     # predict constituency label
     self.label_out = nn.Sequential(
       nn.Dropout(dropout),
       nn.Linear(hid_size * 2, hid_size),
-      nn.BatchNorm1d(hid_size),
       nn.ReLU(),
       nn.Dropout(dropout),
       nn.Linear(hid_size, label_size),
@@ -114,11 +109,11 @@ class DistanceParser(nn.Module):
 
   def forward(self, words, tags):
     mask = (words > 0).float()
-    bsz, ntoken = words.size()
-    emb_words = embedded_dropout(self.encoder, words, dropout=self.dropoute if self.training else 0)
-    emb_words = self.drop(emb_words)
+    B, T = words.size()
 
-    emb_tags = embedded_dropout(self.tag_encoder, tags, dropout=self.dropoute if self.training else 0)
+    emb_words = self.encoder(words)
+    emb_words = self.drop(emb_words)
+    emb_tags = self.tag_encoder(tags)
     emb_tags = self.drop(emb_tags)
 
     def run_rnn(input, rnn, lengths):
@@ -136,7 +131,6 @@ class DistanceParser(nn.Module):
 
     conv_out = self.conv1(rnn_word_out.permute(0, 2, 1)).permute(0, 2, 1)  # (bsize, ndst, hidsize)
     rnn_top_out = run_rnn(conv_out, self.label_rnn, sent_lengths - 1)
-    rnn_top_out = rnn_top_out.view(-1, self.hid_size * 2)
 
     dist_pred = self.dist_out(rnn_top_out).squeeze(dim=-1)  # (bsize, ndst)
     label_pred = self.label_out(rnn_top_out)                # (bsize, ndst, arcsize)

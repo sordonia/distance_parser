@@ -22,7 +22,7 @@ def load_data(data_dir):
     valid_trees = trees.load_trees(valid_data)
     test_trees = trees.load_trees(test_data)
 
-    logger.info("Converting trees...")
+    print("Converting trees...")
     train_parse = [tree.convert() for tree in train_trees]
     valid_parse = [tree.convert() for tree in valid_trees]
     test_parse = [tree.convert() for tree in test_trees]
@@ -42,8 +42,7 @@ def load_data(data_dir):
     label_vocab = vocabulary.Vocabulary()
     label_vocab.index(())
 
-    logger.info("Getting vocabulary...")
-
+    print("Getting vocabulary...")
     for tree in train_parse:
         nodes = [tree]
         while nodes:
@@ -54,10 +53,14 @@ def load_data(data_dir):
             else:
                 tag_vocab.index(node.tag)
                 word_vocab.index(node.word)
+    
+    label_vocab.freeze()
+    word_vocab.freeze()
+    tag_vocab.freeze()
 
-    logger.info("Tag vocab..: %s", tag_vocab.values)
-    logger.info("Label vocab..: %s", label_vocab.values)
-    logger.info("Word vocab..: %s", word_vocab.values[:100])
+    print("Tag vocab: ", tag_vocab.size)
+    print("Label vocab: ", label_vocab.size)
+    print("Word vocab: ", word_vocab.size)
 
     return (word_vocab, tag_vocab, label_vocab,
             train_parse, valid_parse, test_parse)
@@ -74,7 +77,7 @@ def _pad(batch, type='int64', cuda=False):
   return pad_batch
 
 
-def get_iterator(trees, word_vocab, label_vocab, tag_vocab,
+def get_iterator(trees, word_vocab, tag_vocab, label_vocab,
                  batch_size, shuffle=True, unk_drop=True, cuda=False):
   
   idxs = list(range(len(trees)))
@@ -90,6 +93,7 @@ def get_iterator(trees, word_vocab, label_vocab, tag_vocab,
     words_ = [[word_vocab.index(leaf.word) for leaf in tree.leaves()] for tree in trees_]
     labels_ = [[label_vocab.index(label) for label in labels] for labels in labels_]
     unarys_ = [[label_vocab.index(label) for label in labels] for labels in unarys_]
+
     yield (_pad(words_, cuda=cuda), _pad(tags_, cuda=cuda), _pad(dists_, cuda=cuda),
            _pad(labels_, cuda=cuda), _pad(unarys_, cuda=cuda), trees_)
 
