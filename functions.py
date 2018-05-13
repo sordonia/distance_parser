@@ -24,14 +24,19 @@ def binarize_tree(tree):
 def debinarize_tree(tree):
   """Debinarizes the tree.
   """
-  if isinstance(tree, trees.LeafParseNode):
-    return [tree]
-  children = []
-  for child in tree.children:
-    children.extend(debinarize_tree(child))
-  if tree.label:
-    return [trees.InternalParseNode(tree.label, children)]
-  return children
+  def helper(tree):
+    if isinstance(tree, trees.LeafParseNode):
+      return [tree]
+    children = []
+    for child in tree.children:
+      children.extend(helper(child))
+    if tree.label:
+      return [trees.InternalParseNode(tree.label, children)]
+    return children
+  nodes = helper(tree)
+  if len(nodes) == 1:
+    return nodes[0]
+  return trees.InternalParseNode(('S',), nodes)
 
 
 def tree_to_distance(root):

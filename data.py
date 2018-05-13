@@ -14,8 +14,8 @@ logger.setLevel(logging.INFO)
 
 
 def load_data(data_dir):
-    # train_data = os.path.join(data_dir, '02-21.10way.clean')
-    train_data = os.path.join(data_dir, '22.auto.clean')
+    train_data = os.path.join(data_dir, '02-21.10way.clean')
+    # train_data = os.path.join(data_dir, '22.auto.clean')
     valid_data = os.path.join(data_dir, '22.auto.clean')
     test_data = os.path.join(data_dir, '23.auto.clean')
 
@@ -97,7 +97,7 @@ def get_iterator(trees, word_vocab, tag_vocab, label_vocab,
     # sanity check
     for tree, stat in zip(trees_, stats_):
       assert str(tree) == str(debinarize_tree(distance_to_tree(
-          stat[0], stat[1], stat[2], list(tree.leaves())))[0])
+          stat[0], stat[1], stat[2], list(tree.leaves()))))
 
     dists_, labels_, unarys_, _ = zip(*stats_)
     sents_ = [[(l.tag, l.word) for l in tree.leaves()] for tree in trees_]

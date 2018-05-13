@@ -103,7 +103,7 @@ def evaluate_epoch(iterator, epoch, model, vocabs):
     binary_tree = functions.distance_to_tree(
         dist_pred[1:-1], label_pred[1:-1], unary_pred[1:-1],
         list(true_tree.leaves()))
-    pred_tree = functions.debinarize_tree(binary_tree)[0]
+    pred_tree = functions.debinarize_tree(binary_tree)
     pred_trees.append(str(pred_tree))
     true_trees.append(str(true_tree))
 

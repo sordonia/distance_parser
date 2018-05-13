@@ -9,7 +9,7 @@ def _assert_no_grad(variable):
 
 
 def dist_loss(input, target):
-  mask = (input > 0).float()
+  mask = (target > 0).float()
   diff = input[:, :, None] - input[:, None, :]
   target_diff = ((target[:, :, None] - target[:, None, :]) > 0).float()
   mask = mask[:, :, None] * mask[:, None, :] * target_diff
