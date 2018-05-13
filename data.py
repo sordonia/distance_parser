@@ -10,11 +10,11 @@ from functions import binarize_tree, tree_to_distance
 
 logger = logging.getLogger("dp")
 logger.setLevel(logging.INFO)
+# train_data = os.path.join(data_dir, '22.auto.clean')
 
 
 def load_data(data_dir):
     train_data = os.path.join(data_dir, '02-21.10way.clean')
-    # train_data = os.path.join(data_dir, '22.auto.clean')
     valid_data = os.path.join(data_dir, '22.auto.clean')
     test_data = os.path.join(data_dir, '23.auto.clean')
 
@@ -93,13 +93,14 @@ def get_iterator(trees, word_vocab, tag_vocab, label_vocab,
     words_, tags_ = [], []
 
     for sent in sents_:
-        words__ = []
-        tags__ = []
-        for (tag, word) in [('<S>', '<S>')] + sent + [('</S>', '</S>')]:
-            words__.append(word_vocab.index(word))
-            tags__.append(tag_vocab.index(tag))
-        words_.append(words__)
-        tags_.append(tags__)
+      words__ = []
+      tags__ = []
+      for (tag, word) in [('<S>', '<S>')] + sent + [('</S>', '</S>')]:
+        words__.append(word_vocab.index(word) if word_vocab.count(word) > 0
+                       else word_vocab.index(vocabulary.UNK))
+        tags__.append(tag_vocab.index(tag))
+      words_.append(words__)
+      tags_.append(tags__)
 
     labels_ = [[0] + [label_vocab.index(label) for label in labels] + [0] for labels in labels_]
     unarys_ = [[0] + [label_vocab.index(label) for label in labels] + [0] for labels in unarys_]

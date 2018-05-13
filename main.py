@@ -168,8 +168,15 @@ def run(args):
                                   args.bthsz, shuffle=True, unk_drop=False, cuda=args.cuda)
     dev_iterator = get_iterator(valid_parse, word_vocab, tag_vocab, label_vocab,
                                 1, shuffle=False, unk_drop=False, cuda=args.cuda)
+    test_iterator = get_iterator(test_parse, word_vocab, tag_vocab, label_vocab,
+                                 1, shuffle=False, unk_drop=False, cuda=args.cuda)
     train_epoch(train_iterator, epoch, model, optimizer)
-    print(evaluate_epoch(dev_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab)))
+    valid_fscore = evaluate_epoch(dev_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
+    test_fscore = evaluate_epoch(test_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
+    print("epoch {:d}, valid f1 {:.3f}, test f1 {:.3f}".format(
+      epoch, valid_fscore.fscore, test_fscore.fscore))
+    if valid_fscore.fscore is not math.nan:
+      scheduler.step(valid_fscore.fscore)
 
 if __name__ == '__main__':
   args = get_args()
