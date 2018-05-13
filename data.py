@@ -85,7 +85,8 @@ def _index(t, v, token=vocabulary.UNK):
 
 
 def get_iterator(trees, word_vocab, tag_vocab, label_vocab,
-                 batch_size, shuffle=True, unk_drop=True, cuda=False):
+                 batch_size, shuffle=True, unk_drop=True,
+                 cuda=False):
 
   idxs = list(range(len(trees)))
   random.shuffle(idxs)
@@ -107,7 +108,10 @@ def get_iterator(trees, word_vocab, tag_vocab, label_vocab,
       words__ = []
       tags__ = []
       for (tag, word) in [('<S>', '<S>')] + sent + [('</S>', '</S>')]:
-        words__.append(_index(word, word_vocab))
+        count = word_vocab.count(word)
+        if not count or (unk_drop and np.random.rand() < 1 / (1 + count)):
+          word = vocabulary.UNK
+        words__.append(word_vocab.index(word))
         tags__.append(_index(tag, tag_vocab))
       words_.append(words__)
       tags_.append(tags__)

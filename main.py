@@ -156,27 +156,32 @@ def run(args):
   word_vocab, tag_vocab, label_vocab, \
     train_parse, valid_parse, test_parse = load_data(args.data_dir)
   model = DistanceParser(
-    word_vocab.size, 400, 800, tag_vocab.size, label_vocab.size,
-    dropout=0.2, dropoute=0., dropoutr=0.)
+    word_vocab.size, 512, 1200, tag_vocab.size, label_vocab.size,
+    dropout=0.3, dropoute=0., dropoutr=0.)
   if args.cuda:
     model = model.cuda()
 
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0, 0.999),
                                weight_decay=args.weight_decay)
-  scheduler = ReduceLROnPlateau(optimizer, mode='max', patience=2, factor=0.5, min_lr=0.000001)
+  scheduler = ReduceLROnPlateau(optimizer, mode='max', patience=2,
+                                factor=0.5, min_lr=0.000001, verbose=True)
   for epoch in range(args.epc):
     train_iterator = get_iterator(train_parse, word_vocab, tag_vocab, label_vocab,
-                                  args.bthsz, shuffle=True, unk_drop=False, cuda=args.cuda)
+                                  args.bthsz, shuffle=True, unk_drop=True, cuda=args.cuda)
     print("Evaluating...")
     dev_iterator = get_iterator(valid_parse, word_vocab, tag_vocab, label_vocab,
                                 1, shuffle=False, unk_drop=False, cuda=args.cuda)
     test_iterator = get_iterator(test_parse, word_vocab, tag_vocab, label_vocab,
                                  1, shuffle=False, unk_drop=False, cuda=args.cuda)
     train_epoch(train_iterator, epoch, model, optimizer)
+    train_iterator = get_iterator(train_parse, word_vocab, tag_vocab, label_vocab,
+                                  1, shuffle=True, unk_drop=False, cuda=args.cuda)
+    train_iterator = iter(x for i, x in enumerate(train_iterator) if i < 1000)
+    train_fscore = evaluate_epoch(train_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
     valid_fscore = evaluate_epoch(dev_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
     test_fscore = evaluate_epoch(test_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
-    print("epoch {:d}, valid f1 {:.3f}, test f1 {:.3f}".format(
-      epoch, valid_fscore.fscore, test_fscore.fscore))
+    print("epoch {:d}, train f1 {:.3f}, valid f1 {:.3f}, test f1 {:.3f}".format(
+        epoch, train_fscore.fscore, valid_fscore.fscore, test_fscore.fscore))
     if valid_fscore.fscore is not math.nan:
       scheduler.step(valid_fscore.fscore)
 
