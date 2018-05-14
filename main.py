@@ -169,7 +169,8 @@ def run(args):
                                 factor=0.5, min_lr=0.000001, verbose=True)
   for epoch in range(args.epc):
     train_iterator = get_iterator(train_parse, word_vocab, tag_vocab, label_vocab,
-                                  args.bthsz, shuffle=True, unk_drop=True, cuda=args.cuda)
+                                  args.bthsz, shuffle=True, unk_drop=True, cuda=args.cuda,
+                                  use_transformer=True)
     train_epoch(train_iterator, epoch, model_parallel, optimizer)
 
     print("Evaluating...")
