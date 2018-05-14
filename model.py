@@ -44,7 +44,7 @@ class LayerNormalization(nn.Module):
 class DistanceParser(nn.Module):
   def __init__(self,
          vocab_size, embed_size, hid_size, tag_size, label_size, wordembed=None,
-         dropout=0.2, dropoute=0.1, dropoutr=0.1):
+         dropout=0.2, dropoute=0.1, dropoutr=0.1, nlayers=2):
     super(DistanceParser, self).__init__()
     self.vocab_size = vocab_size
     self.embed_size = embed_size
@@ -52,6 +52,7 @@ class DistanceParser(nn.Module):
     self.hid_size = hid_size
     self.label_size = label_size
     self.drop = nn.Dropout(dropout)
+    self.dropout = dropout
     self.dropoute = dropoute
     self.dropoutr = dropoutr
     self.encoder = nn.Embedding(vocab_size, embed_size)
@@ -59,11 +60,11 @@ class DistanceParser(nn.Module):
     if wordembed is not None:
       self.encoder.weight.data = torch.FloatTensor(wordembed)
     self.word_rnn = nn.LSTM(
-        2 * embed_size, hid_size, num_layers=2, batch_first=True, dropout=dropout,
+        2 * embed_size, hid_size, num_layers=nlayers, batch_first=True, dropout=dropout,
         bidirectional=True)
     self.word_rnn = WeightDrop(
         self.word_rnn,
-        ['weight_hh_l0', 'weight_hh_l1'],
+        ['weight_hh_l%d' % l for l in range(nlayers)],
         dropout=dropoutr)
     self.conv1 = nn.Sequential(
         nn.Dropout(dropout),
@@ -71,68 +72,52 @@ class DistanceParser(nn.Module):
                   hid_size, 2),
         nn.BatchNorm1d(hid_size),
         nn.ReLU())
-
     # label rnn
     self.label_rnn = nn.LSTM(
         hid_size, hid_size,
-        num_layers=2, batch_first=True, dropout=dropout,
+        num_layers=nlayers, batch_first=True, dropout=dropout,
         bidirectional=True)
     self.label_rnn = WeightDrop(
-        self.label_rnn, ['weight_hh_l0'], dropout=dropoutr)
-
+        self.label_rnn, ['weight_hh_l%d' % l for l in range(nlayers)],
+        dropout=dropoutr)
     # predicting unary chains ending in a terminal
     self.unary_out = nn.Sequential(
-      nn.Dropout(dropout),
-      nn.Linear(hid_size * 2, hid_size),
-      LayerNormalization(hid_size),
-      nn.ReLU(),
-      nn.Dropout(dropout),
-      nn.Linear(hid_size, label_size)
+      nn.Linear(hid_size * 2, label_size)
     )
-
     # predict syntactic distance
     self.dist_out = nn.Sequential(
-      nn.Dropout(dropout),
-      nn.Linear(hid_size * 2, hid_size),
-      LayerNormalization(hid_size),
-      nn.ReLU(),
-      nn.Dropout(dropout),
-      nn.Linear(hid_size, 1)
+      nn.Linear(hid_size * 2, 1),
     )
-
     # predict constituency label
     self.label_out = nn.Sequential(
-      nn.Dropout(dropout),
-      nn.Linear(hid_size * 2, hid_size),
-      LayerNormalization(hid_size),
-      nn.ReLU(),
-      nn.Dropout(dropout),
-      nn.Linear(hid_size, label_size),
+      nn.Linear(hid_size * 2, label_size)
     )
+
+  def feature_drop(self, x):
+    if self.training:
+      B, _, D = x.size()
+      dmask = torch.ones(B, D)
+      dmask.bernoulli_(1. - self.dropout).div(1. - self.dropout).float()
+      if x.is_cuda:
+        dmask = dmask.cuda()
+      x = x * dmask[:, None, :]
+    return x
 
   def forward(self, words, tags):
     mask = (words > 0).float()
     B, T = words.size()
-    emb_words = self.encoder(words)
-    emb_words = self.drop(emb_words)
-    emb_tags = self.tag_encoder(tags)
-    emb_tags = self.drop(emb_tags)
-
-    def run_rnn(input, rnn, lengths):
-      sorted_idx = numpy.argsort(lengths)[::-1].tolist()
-      rnn_input = pack_padded_sequence(input[sorted_idx], lengths[sorted_idx], batch_first=True)
-      rnn_out, _ = rnn(rnn_input)  # (bsize, ntoken, hidsize*2)
-      rnn_out, _ = pad_packed_sequence(rnn_out, batch_first=True)
-      rnn_out = rnn_out[numpy.argsort(sorted_idx).tolist()]
-      return rnn_out
-
+    emb_words = embedded_dropout(self.encoder, words, dropout=self.dropoute if self.training else 0)
+    emb_words = self.feature_drop(emb_words)
+    emb_tags = embedded_dropout(self.tag_encoder, tags, dropout=self.dropoute if self.training else 0)
+    emb_tags = self.feature_drop(emb_tags)
     sent_lengths = mask.sum(1).cpu().numpy().astype('int')
     emb_plus_tag = torch.cat([emb_words, emb_tags], dim=-1)
-    rnn_word_out = run_rnn(emb_plus_tag, self.word_rnn, sent_lengths)
-    unary_pred = self.unary_out(rnn_word_out.view(-1, self.hid_size * 2))
-
-    conv_out = self.conv1(rnn_word_out.permute(0, 2, 1)).permute(0, 2, 1)  # (bsize, ndst, hidsize)
+    rnn_word_out, _ = self.word_rnn(emb_plus_tag)
+    conv_out = self.conv1(rnn_word_out.permute(0, 2, 1)).permute(0, 2, 1)
     rnn_top_out, _ = self.label_rnn(conv_out)
+    rnn_top_out = self.feature_drop(rnn_top_out)
+    rnn_word_out = self.feature_drop(rnn_word_out)
+    unary_pred = self.unary_out(rnn_word_out.contiguous().view(-1, self.hid_size * 2))
     dist_pred = self.dist_out(rnn_top_out).squeeze(dim=-1)  # (bsize, ndst)
     label_pred = self.label_out(rnn_top_out)                # (bsize, ndst, arcsize)
     return (dist_pred,

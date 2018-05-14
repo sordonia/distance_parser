@@ -18,10 +18,6 @@ from loss import dist_loss, label_loss, unary_loss
 from model import DistanceParser
 
 
-logger = logging.getLogger("dp")
-logger.setLevel(logging.INFO)
-
-
 class FScore(object):
     def __init__(self, recall, precision, fscore):
         self.recall = recall
@@ -39,13 +35,13 @@ def get_args():
     parser.add_argument('--epc', type=int, default=100)
     parser.add_argument('--lr', type=float, default=.001)
     parser.add_argument('--bthsz', type=int, default=200)
-    parser.add_argument('--hidsz', type=int, default=800)
+    parser.add_argument('--hidsz', type=int, default=1000)
     parser.add_argument('--embedsz', type=int, default=400)
     parser.add_argument('--window_size', type=int, default=2)
     parser.add_argument('--dpout', type=float, default=0.2)
-    parser.add_argument('--dpoute', type=float, default=0.)
-    parser.add_argument('--dpoutr', type=float, default=0.)
-    parser.add_argument('--seed', type=int, default=1234)
+    parser.add_argument('--dpoute', type=float, default=0.1)
+    parser.add_argument('--dpoutr', type=float, default=0.2)
+    parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--weight_decay', type=float, default=1e-6)
     parser.add_argument('--use_glove', action='store_true')
     parser.add_argument('--logfre', type=int, default=200)
@@ -64,18 +60,16 @@ def get_args():
 
 def train_epoch(iterator, epoch, model, optimizer):
   model.train()
-
   for nb, batch in enumerate(iterator):
     words, tags, dists, labels, unarys, trees = batch
     dist_pred, label_pred, unary_pred = model(words, tags)
-
     loss_dist = dist_loss(dist_pred, dists)
     loss_labl = label_loss(label_pred, labels.view(-1))
     loss_unary = unary_loss(unary_pred, unarys.view(-1))
-    optimizer.zero_grad()
-
     loss = loss_dist + loss_labl + loss_unary
+    optimizer.zero_grad()
     loss.backward()
+    nn.utils.clip_grad_norm_(model.parameters(), 0.25)
     optimizer.step()
 
     if nb % 10 == 0:
@@ -90,22 +84,28 @@ def evaluate_epoch(iterator, epoch, model, vocabs):
   true_trees = []
   word_vocab, tag_vocab, label_vocab = vocabs
 
-  # assume batch size 1
   for nb, batch in enumerate(iterator):
     words, tags, dists, labels, unarys, trees = batch
-    true_tree = trees[0]
+    B, T = words.size()
     dist_pred, label_pred, unary_pred = model(words, tags)
-    dist_pred = dist_pred[0].data.cpu().numpy()
+    dist_pred = dist_pred.data.cpu().numpy()
     label_pred = np.argmax(label_pred.data.cpu().numpy(), 1)
     unary_pred = np.argmax(unary_pred.data.cpu().numpy(), 1)
-    label_pred = [label_vocab.value(x) for x in label_pred]
-    unary_pred = [label_vocab.value(x) for x in unary_pred]
-    binary_tree = functions.distance_to_tree(
-        dist_pred[1:-1], label_pred[1:-1], unary_pred[1:-1],
-        list(true_tree.leaves()))
-    pred_tree = functions.debinarize_tree(binary_tree)
-    pred_trees.append(str(pred_tree))
-    true_trees.append(str(true_tree))
+    label_pred = np.reshape(label_pred, (B, T - 1))
+    unary_pred = np.reshape(unary_pred, (B, T))
+
+    for i in range(B):
+      true_tree = trees[i]
+      ni = len(list(true_tree.leaves())) + 2  # <S>, </S>
+      dist_i = dist_pred[i][:ni-1]
+      label_i = [label_vocab.value(x) for x in label_pred[i][:ni-1]]
+      unary_i = [label_vocab.value(x) for x in unary_pred[i][:ni]]
+      binary_tree = functions.distance_to_tree(
+          dist_i[1:-1], label_i[1:-1], unary_i[1:-1],
+          list(true_tree.leaves()))
+      pred_tree = functions.debinarize_tree(binary_tree)
+      pred_trees.append(str(pred_tree))
+      true_trees.append(str(true_tree))
 
   temp_path = tempfile.TemporaryDirectory(prefix="evalb-")
   temp_file_path = os.path.join(temp_path.name, "pred_trees.txt")
@@ -156,11 +156,13 @@ def run(args):
   word_vocab, tag_vocab, label_vocab, \
     train_parse, valid_parse, test_parse = load_data(args.data_dir)
   model = DistanceParser(
-    word_vocab.size, 512, 1200, tag_vocab.size, label_vocab.size,
-    dropout=0.3, dropoute=0., dropoutr=0.)
+    word_vocab.size, args.embedsz, args.hidsz, tag_vocab.size,
+    label_vocab.size, dropout=args.dpout, dropoute=args.dpoute, dropoutr=args.dpoutr,
+    nlayers=2)
+  model_parallel = nn.DataParallel(model, device_ids=[0, 1, 2, 3])
   if args.cuda:
     model = model.cuda()
-
+    model_parallel = model_parallel.cuda()
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0, 0.999),
                                weight_decay=args.weight_decay)
   scheduler = ReduceLROnPlateau(optimizer, mode='max', patience=2,
@@ -168,15 +170,16 @@ def run(args):
   for epoch in range(args.epc):
     train_iterator = get_iterator(train_parse, word_vocab, tag_vocab, label_vocab,
                                   args.bthsz, shuffle=True, unk_drop=True, cuda=args.cuda)
+    train_epoch(train_iterator, epoch, model_parallel, optimizer)
+
     print("Evaluating...")
     dev_iterator = get_iterator(valid_parse, word_vocab, tag_vocab, label_vocab,
-                                1, shuffle=False, unk_drop=False, cuda=args.cuda)
+                                200, shuffle=False, unk_drop=False, cuda=args.cuda)
     test_iterator = get_iterator(test_parse, word_vocab, tag_vocab, label_vocab,
-                                 1, shuffle=False, unk_drop=False, cuda=args.cuda)
-    train_epoch(train_iterator, epoch, model, optimizer)
+                                 200, shuffle=False, unk_drop=False, cuda=args.cuda)
     train_iterator = get_iterator(train_parse, word_vocab, tag_vocab, label_vocab,
-                                  1, shuffle=True, unk_drop=False, cuda=args.cuda)
-    train_iterator = iter(x for i, x in enumerate(train_iterator) if i < 1000)
+                                  200, shuffle=True, unk_drop=False, cuda=args.cuda)
+    train_iterator = iter(x for i, x in enumerate(train_iterator) if i < 5)
     train_fscore = evaluate_epoch(train_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
     valid_fscore = evaluate_epoch(dev_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))
     test_fscore = evaluate_epoch(test_iterator, epoch, model, (word_vocab, tag_vocab, label_vocab))

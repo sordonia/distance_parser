@@ -8,11 +8,6 @@ import torch
 from functions import *
 
 
-logger = logging.getLogger("dp")
-logger.setLevel(logging.INFO)
-# train_data = os.path.join(data_dir, '22.auto.clean')
-
-
 def load_data(data_dir):
     train_data = os.path.join(data_dir, '02-21.10way.clean')
     # train_data = os.path.join(data_dir, '22.auto.clean')
