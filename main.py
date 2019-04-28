@@ -159,7 +159,7 @@ def run(args):
     word_vocab.size, args.embedsz, args.hidsz, tag_vocab.size,
     label_vocab.size, dropout=args.dpout, dropoute=args.dpoute, dropoutr=args.dpoutr,
     nlayers=2)
-  model_parallel = nn.DataParallel(model, device_ids=[0, 1, 2, 3])
+  model_parallel = nn.DataParallel(model)
   if args.cuda:
     model = model.cuda()
     model_parallel = model_parallel.cuda()
@@ -169,8 +169,7 @@ def run(args):
                                 factor=0.5, min_lr=0.000001, verbose=True)
   for epoch in range(args.epc):
     train_iterator = get_iterator(train_parse, word_vocab, tag_vocab, label_vocab,
-                                  args.bthsz, shuffle=True, unk_drop=True, cuda=args.cuda,
-                                  use_transformer=True)
+                                  args.bthsz, shuffle=True, unk_drop=True, cuda=args.cuda)
     train_epoch(train_iterator, epoch, model_parallel, optimizer)
 
     print("Evaluating...")

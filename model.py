@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from blocks import WeightDrop, embedded_dropout
-from transformer.model import Encoder
+
 
 class Shuffle(nn.Module):
   def __init__(self, permutation, contiguous=True):
@@ -84,9 +84,7 @@ class DistanceParser(nn.Module):
           self.label_rnn, ['weight_hh_l%d' % l for l in range(nlayers)],
           dropout=dropoutr)
     else:
-      self.transf = Encoder(2 * self.embed_size, self.hid_size, 4, 4, 4 * self.hid_size, 2 * self.hid_size,
-                            self.hid_size, max_length=1000, input_dropout=0.0, layer_dropout=dropout, 
-                            attention_dropout=0.0, relu_dropout=0.0, use_mask=False)
+      assert False
     # predicting unary chains ending in a terminal
     self.unary_out = nn.Sequential(
       nn.Linear(hid_size * 2, label_size)
